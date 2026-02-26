@@ -8,4 +8,4 @@ spring:
       host: localhost
       port: 27017
       database: customer
-      authentication-database: root
+      authentication-database: admin
