@@ -118,12 +118,3 @@ services/
 └── product/                # Product microservice (PostgreSQL + Flyway)
 ```
 
-## Roadmap
-
-- [ ] Order Service
-- [ ] Payment Service
-- [ ] Notification Service (Kafka consumer)
-- [ ] API Gateway
-- [ ] Kafka integration
-- [ ] Zipkin distributed tracing
-- [ ] Keycloak authentication
