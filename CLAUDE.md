@@ -31,6 +31,7 @@ docker-compose up -d
 docker-compose down
 ```
 
+
 ### Build a service
 ```bash
 mvn clean package -f services/<service-name>/pom.xml -DskipTests
@@ -72,3 +73,16 @@ mvn test -f services/<service-name>/pom.xml -Dtest=ClassName
 | pgAdmin | http://localhost:5050 |
 | Mongo Express | http://localhost:8081 (credentials: root/root) |
 | Mail Dev UI | http://localhost:1080 |
+
+## Resources & References
+
+### Architecture & Diagrams
+![Architecture Diagram](resourses/photo_2026-03-04_14-57-45.jpg)
+
+### Books & Documentation
+- [Clean Code](file:///C:/Users/Andrii/Downloads/BIBLE%20-%20Clean%20Code%20-%20Robert%20Cecil%20Martin.pdf)
+- [Clean Architecture](file:///C:/Users/Andrii/OneDrive%20-%20CZU%20v%20Praze/Plocha/booksmain/Clean%20Architecture%20eng.pdf)
+- [Spring Fast](https://abitap.com/wp-content/uploads/2024/02/spring-b%D1%8Bstro-2023-laurenczyu-spylk%D1%8D.pdf)
+
+### YouTube Videos
+- [🚀 🔥 Mastering Microservices: Spring boot, Spring Cloud and Keycloak In 7 Hours](https://www.youtube.com/watch?v=jdeSV0GRvwI&t=6384s)
