@@ -44,6 +44,11 @@ build/
 ### Mac OS ###
 .DS_Store
 
+### Windows ###
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
 ### Node ###
 node_modules/
 package-lock.json
@@ -51,6 +56,12 @@ package-lock.json
 ### Claude Code ###
 .claude/
 CLAUDE.md
+
+### Spring Boot ###
+*.pid
+
+### Docker ###
+**/docker-compose.override.yml
 
 ### Environment / Secrets ###
 .env
