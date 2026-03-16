@@ -3,6 +3,8 @@ package com.petproject.ecomnerce.product;
 import com.petproject.ecomnerce.exception.ProductPurchaseException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -51,12 +53,23 @@ public class ProductService {
         return purchasedProducts;
     }
 
+    /**
+     * GET PRODUCT BY ID
+     * Uses Redis cache - if product is in cache, returns from cache
+     * Otherwise, fetches from database and stores in cache
+     */
+    @Cacheable(value = "PRODUCT_CACHE", key = "#productId")
     public ProductResponse findById(Integer productId) {
         return repository.findById(productId)
                 .map(mapper::toProductResponse)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with the ID:" + productId));
     }
 
+    /**
+     * GET ALL PRODUCTS
+     * Cached with key "all"
+     */
+    @Cacheable(value = "PRODUCT_CACHE", key = "'all'")
     public List<ProductResponse> findAll() {
         return repository.findAll()
                 .stream()

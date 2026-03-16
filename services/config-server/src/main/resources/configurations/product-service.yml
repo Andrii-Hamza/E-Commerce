@@ -18,3 +18,23 @@ spring:
     baseline-version: 0
     user: ${spring.datasource.username}
     password: ${spring.datasource.password}
+
+  # Redis Cache Configuration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 60000  # Connection timeout in milliseconds
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000  # Cache entries expire after 10 minutes (in ms)
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    #org.springframework.cache: DEBUG
+    org.springframework.cache: TRACE
+    org.springframework.data.redis: DEBUG
+
