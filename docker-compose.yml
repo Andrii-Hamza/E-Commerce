@@ -8,6 +8,7 @@ services:
       PGDATA: /data/postgres
     volumes:
       - postgres:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     ports:
       - "5432:5432"
     networks:
@@ -40,6 +41,9 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: root
       MONGO_INITDB_DATABASE: admin
+    networks:
+      - microservices-net
+
   mongo-express:
     container_name: ms_mongo_express
     image: mongo-express
@@ -51,6 +55,8 @@ services:
       ME_CONFIG_BASICAUTH_ENABLED: true
       ME_CONFIG_BASICAUTH_USERNAME: root
       ME_CONFIG_BASICAUTH_PASSWORD: root
+    networks:
+      - microservices-net
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
@@ -65,6 +71,7 @@ services:
     #todo see how it will work without THIS port
     networks:
       - microservices-net
+
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     container_name: ms_kafka
@@ -81,8 +88,6 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://ms_kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-#      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-#      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
     networks:
       - microservices-net
 
@@ -92,6 +97,8 @@ services:
     ports:
       - 1080:1080
       - 1025:1025
+    networks:
+      - microservices-net
 
   zipkin:
     container_name: zipkin
@@ -124,6 +131,175 @@ services:
 #      - "start-dev"
 #pom.xml(gateway) uncomment security, SecurityConfig in gateway logic, and security in application yml to gateway
 
+  ## Microservices
+
+  config-server:
+    container_name: config-server
+    build:
+      context: ./services/config-server
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8888/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  discovery-service:
+    container_name: discovery-service
+    build:
+      context: ./services/discovery-service
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_HOSTNAME: discovery-service
+    depends_on:
+      config-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  customer-service:
+    container_name: customer-service
+    build:
+      context: ./services/customer
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_HOSTNAME: customer-service
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka
+      MONGODB_HOST: ms_mongo_db
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  product-service:
+    container_name: product-service
+    build:
+      context: ./services/product
+      dockerfile: Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_HOSTNAME: product-service
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka
+      POSTGRES_HOST: postgresql
+      REDIS_HOST: redis
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  order-service:
+    container_name: order-service
+    build:
+      context: ./services/order
+      dockerfile: Dockerfile
+    ports:
+      - "8070:8070"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_HOSTNAME: order-service
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka
+      POSTGRES_HOST: postgresql
+      KAFKA_BOOTSTRAP_SERVERS: ms_kafka:29092
+      GATEWAY_HOST: gateway
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  payment-service:
+    container_name: payment-service
+    build:
+      context: ./services/payment
+      dockerfile: Dockerfile
+    ports:
+      - "8060:8060"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_HOSTNAME: payment-service
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka
+      POSTGRES_HOST: postgresql
+      KAFKA_BOOTSTRAP_SERVERS: ms_kafka:29092
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  notification-service:
+    container_name: notification-service
+    build:
+      context: ./services/notification
+      dockerfile: Dockerfile
+    ports:
+      - "8040:8040"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_HOSTNAME: notification-service
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka
+      MONGODB_HOST: ms_mongo_db
+      KAFKA_BOOTSTRAP_SERVERS: ms_kafka:29092
+      MAIL_HOST: ms_mail_dev
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  gateway:
+    container_name: gateway
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8222:8222"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_HOSTNAME: gateway
+      EUREKA_SERVER_URL: http://discovery-service:8761/eureka
+    depends_on:
+      customer-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
 networks:
   microservices-net:
     driver: bridge
@@ -133,5 +309,3 @@ volumes:
   pgadmin:
   mongo:
   redis:
-
-
