@@ -22,7 +22,7 @@ Spring Boot microservices e-commerce application using Spring Cloud 2025.1.0 and
 7. `payment` (port 8060) — PostgreSQL-backed, processes payments and produces Kafka events
 8. `notification` (port 8040) — MongoDB-backed, consumes Kafka events and sends emails via mail-dev
 
-**Configuration flow:** Each service bootstraps via `spring.config.import=configserver:http://localhost:8888`, then loads its `<service-name>.yml` from `services/config-server/src/main/resources/configurations/`.
+**Configuration flow:** Each service bootstraps via `spring.config.import=configserver:http://localhost:8888` (overridden in Docker via `SPRING_CONFIG_IMPORT` env var to `http://config-server:8888`), then loads its `<service-name>.yml` from `services/config-server/src/main/resources/configurations/`. Config server configurations use `${ENV_VAR:default}` placeholders (e.g., `${POSTGRES_HOST:localhost}`) to support both local and Docker environments.
 
 **Messaging:** Kafka (port 9092, Zookeeper on 22181) for async communication:
 - `order-topic` — Order Service produces `OrderConfirmation`, Notification Service consumes
@@ -37,23 +37,40 @@ Spring Boot microservices e-commerce application using Spring Cloud 2025.1.0 and
 
 ## Build & Run
 
-### Infrastructure (Docker)
+### Full Stack (Docker Compose)
 ```bash
-# Start all infrastructure (PostgreSQL, MongoDB, Kafka, Zookeeper, pgAdmin, Mongo Express, mail-dev)
-docker-compose up -d
+# Build and start everything (infrastructure + all services)
+docker compose up -d --build
+
+# Start without rebuilding
+docker compose up -d
 
 # Stop
-docker-compose down
+docker compose down
 ```
 
+All 8 services are dockerized with multi-stage builds (Java 21 Alpine). Docker Compose handles the startup order automatically:
+1. `config-server` starts first (healthcheck on `/actuator/health`)
+2. `discovery-service` waits for config-server to be healthy
+3. Business services wait for discovery-service to be healthy
+4. `gateway` starts last (after all business services)
 
-### Build a service
+**Docker networking:** Services use `SPRING_CONFIG_IMPORT` env var to override the config server URL (`http://config-server:8888` instead of `localhost`). Config server configurations use `${ENV_VAR:default}` placeholders so the same config works both locally and in Docker.
+
+**PostgreSQL databases** (`order`, `payment`, `product`) are auto-created on first start via `docker/postgres/init-databases.sql`.
+
+### Infrastructure Only (for local development)
+```bash
+# Start only infrastructure (PostgreSQL, MongoDB, Kafka, Zookeeper, pgAdmin, Mongo Express, mail-dev, Zipkin, Redis)
+docker compose up postgresql pgadmin mongodb mongo-express zookeeper kafka mail-dev zipkin redis -d
+```
+
+### Build a single service
 ```bash
 mvn clean package -f services/<service-name>/pom.xml -DskipTests
-# e.g.: mvn clean package -f services/customer/pom.xml -DskipTests
 ```
 
-### Run a service (after building)
+### Run a single service locally (after building)
 ```bash
 java -jar services/<service-name>/target/<service-name>-0.0.1-SNAPSHOT.jar
 ```
@@ -98,6 +115,7 @@ mvn test -f services/<service-name>/pom.xml -Dtest=ClassName
 | Mongo Express | http://localhost:8081 (credentials: root/root) |
 | Mail Dev UI | http://localhost:1080 |
 | Kafka | localhost:9092 |
+| Zipkin | http://localhost:9411 |
 
 ## Resources & References
 

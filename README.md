@@ -46,7 +46,10 @@ The system follows a microservices architecture with:
 - **MongoDB** — Document data (Customer, Notification)
 - **Flyway** — Database migrations (Product Service)
 - **Thymeleaf** — HTML email templates (Notification Service)
-- **Docker Compose** — Infrastructure orchestration
+- **Redis** — Caching (Product Service)
+- **Zipkin** — Distributed tracing
+- **Docker** — Multi-stage builds for all services (Java 21 Alpine)
+- **Docker Compose** — Full-stack orchestration (infrastructure + all services)
 
 ## Getting Started
 
@@ -56,56 +59,56 @@ The system follows a microservices architecture with:
 - Maven 3.9+
 - Docker & Docker Compose
 
-### 1. Start Infrastructure
+### Option A: Full Stack with Docker (Recommended)
 
 ```bash
-docker-compose up -d
+# Build and start everything
+docker compose up -d --build
+
+# Check all services are running
+docker compose ps
+
+# View logs for a specific service
+docker compose logs -f <service-name>
+
+# Stop everything
+docker compose down
 ```
 
-This starts PostgreSQL, MongoDB, Kafka, Zookeeper, pgAdmin, Mongo Express, and MailDev.
+Docker Compose handles the startup order automatically via healthchecks:
+1. **config-server** starts first
+2. **discovery-service** waits for config-server to be healthy
+3. **Business services** wait for discovery-service to be healthy
+4. **gateway** starts last (after all business services are up)
 
-### 2. Start Services (in order)
+PostgreSQL databases (`order`, `payment`, `product`) are auto-created on first start.
 
-Services must be started in this specific order due to dependencies:
+### Option B: Local Development
+
+Start only infrastructure, then run services manually:
 
 ```bash
-# 1. Config Server (must start first — all services depend on it)
+# 1. Start infrastructure
+docker compose up postgresql pgadmin mongodb mongo-express zookeeper kafka mail-dev zipkin redis -d
+
+# 2. Build and run services (in order)
 mvn clean package -f services/config-server/pom.xml -DskipTests
 java -jar services/config-server/target/config-server-0.0.1-SNAPSHOT.jar
 
-# 2. Discovery Service (Eureka — must start before business services)
 mvn clean package -f services/discovery-service/pom.xml -DskipTests
 java -jar services/discovery-service/target/discovery-service-0.0.1-SNAPSHOT.jar
 
-# 3. Gateway
-mvn clean package -f services/gateway/pom.xml -DskipTests
-java -jar services/gateway/target/gateway-0.0.1-SNAPSHOT.jar
-
-# 4. Customer Service
-mvn clean package -f services/customer/pom.xml -DskipTests
-java -jar services/customer/target/customer-0.0.1-SNAPSHOT.jar
-
-# 5. Product Service
-mvn clean package -f services/product/pom.xml -DskipTests
-java -jar services/product/target/product-0.0.1-SNAPSHOT.jar
-
-# 6. Order Service
-mvn clean package -f services/order/pom.xml -DskipTests
-java -jar services/order/target/order-0.0.1-SNAPSHOT.jar
-
-# 7. Payment Service
-mvn clean package -f services/payment/pom.xml -DskipTests
-java -jar services/payment/target/payment-0.0.1-SNAPSHOT.jar
-
-# 8. Notification Service
-mvn clean package -f services/notification/pom.xml -DskipTests
-java -jar services/notification/target/notification-0.0.1-SNAPSHOT.jar
+# Then start remaining services in any order:
+# gateway, customer, product, order, payment, notification
+mvn clean package -f services/<service-name>/pom.xml -DskipTests
+java -jar services/<service-name>/target/<service-name>-0.0.1-SNAPSHOT.jar
 ```
 
-### 3. Verify
+### Verify
 
 - Eureka Dashboard: http://localhost:8761 — all services should be registered
-- Config Server: http://localhost:8888
+- Config Server: http://localhost:8888/actuator/health
+- API Gateway: http://localhost:8222/api/v1/customers
 
 ## API Endpoints
 
@@ -159,6 +162,7 @@ No REST endpoints — event-driven only. Consumes Kafka messages and sends email
 | pgAdmin | http://localhost:5050 | pgadmin4@pgadmin.org / admin |
 | Mongo Express | http://localhost:8081 | root / root |
 | MailDev | http://localhost:1080 | — |
+| Zipkin | http://localhost:9411 | — |
 
 ## Project Structure
 
@@ -168,8 +172,11 @@ services/
 ├── discovery-service/      # Eureka service registry
 ├── gateway/                # API Gateway (Spring Cloud Gateway)
 ├── customer/               # Customer microservice (MongoDB)
-├── product/                # Product microservice (PostgreSQL + Flyway)
+├── product/                # Product microservice (PostgreSQL + Flyway + Redis cache)
 ├── order/                  # Order microservice (PostgreSQL + Kafka producer)
 ├── payment/                # Payment microservice (PostgreSQL + Kafka producer)
 └── notification/           # Notification microservice (MongoDB + Kafka consumer + email)
+docker/
+└── postgres/
+    └── init-databases.sql  # Auto-creates order, payment, product databases
 ```
