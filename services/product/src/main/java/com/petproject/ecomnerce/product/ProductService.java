@@ -64,7 +64,6 @@ public class ProductService {
                 .map(mapper::toProductResponse)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with the ID:" + productId));
     }
-
     /**
      * GET ALL PRODUCTS
      * Cached with key "all"
