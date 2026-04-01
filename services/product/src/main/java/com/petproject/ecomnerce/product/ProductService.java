@@ -19,7 +19,7 @@ public class ProductService {
     private final ProductRepository repository;
     private final ProductMapper mapper;
 
-    public Integer createProduct( ProductRequest request) {
+    public Integer createProduct(ProductRequest request) {
         var product = mapper.toProduct(request);
         return repository.save(product).getId();
     }
@@ -64,6 +64,7 @@ public class ProductService {
                 .map(mapper::toProductResponse)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with the ID:" + productId));
     }
+
     /**
      * GET ALL PRODUCTS
      * Cached with key "all"
